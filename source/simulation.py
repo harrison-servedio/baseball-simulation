@@ -7,7 +7,8 @@ class frame:
             base_state = '000',     # base_state - 0 for no player, 1 for a player, goes 1st, 2nd, 3rd
             outs = 0,               # outs - the number of outs in the inning, does accept negatives to simulate longer innings
             at_bat = 1              # at_bat - player up to bat to start the simulation, this value is 1 indexed
-    ):
+        ):
+        
         self.team = team
         self.first, self.second, self.third = [int(i) for i in list(base_state)]
         self.outs = outs
@@ -95,9 +96,7 @@ class frame:
                         runs += 1
                     if third:
                         runs += 1
-                    first = 0
-                    second = 0
-                    third = 0
+                    first, second, third = 0, 0, 0
                     runs += 1
                 # Out
                 case 5:
