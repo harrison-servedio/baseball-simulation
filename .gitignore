@@ -1,2 +1,3 @@
 *.feather
 test.*
+__pycache__
