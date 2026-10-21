@@ -1,3 +1,22 @@
+# Data files (large; not in git) and the PA-table cache (pa_table.feather)
 *.feather
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Scratch files
 test.*
-__pycache__
