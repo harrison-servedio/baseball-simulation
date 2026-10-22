@@ -1,3 +1,9 @@
+import os
+import sys
+
+# Let `import source...` work when this file is run directly.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+
 from source.dataloaders import load_pa_table, observed_runs_per_nine
 from source.simulation import simulate_half_inning, nrgg, simulate_games
 from source.baserunning import EmpiricalTransitions
