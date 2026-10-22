@@ -12,21 +12,20 @@ from source.players import Player
 
 pa = load_pa_table('TruMedia2026.feather')
 
-league_avg = Player.league_average(pa)
+# Only PAs where both teams are in the ACC or SEC.
+acc_sec = league_subset(pa)
 
-emp = EmpiricalTransitions.fit(pa, 20)
+league_avg = Player.league_average(acc_sec)
 
+emp = EmpiricalTransitions.fit(acc_sec, 20)
+
+# player = Player.from_data(acc_sec, name='')
+# print(player.probs)
 
 N_GAMES = 50_000
 
-
+print("\nAverage player")
 print(nrgg(league_avg, emp, N_GAMES))
 
 
-team = []
-for _ in range(9):
-    team.append(Player.league_average(pa))
-
-print(simulate_games(team, emp, N_GAMES))
-
-print(observed_runs_per_nine(league_subset(pa)))
+print(f"\nActual average runs per 9: {observed_runs_per_nine(acc_sec)}")
