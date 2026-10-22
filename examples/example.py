@@ -11,11 +11,10 @@ league_avg = Player.league_average(pa)
 emp = EmpiricalTransitions.fit(pa, 20)
 
 
-N_GAMES = 50_000   # per simulation; the 95% CI is roughly +/- 0.035 runs
-SEED = 2026
+N_GAMES = 50_000
 
 
-print(nrgg(league_avg, emp, N_GAMES, SEED))
+print(nrgg(league_avg, emp, N_GAMES))
 
 
 team = []
