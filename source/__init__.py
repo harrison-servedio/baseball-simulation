@@ -10,6 +10,10 @@ Modules, in the order data flows through them:
     baserunning  - where runners go after each outcome (simple rules or
                    learned from data)
     simulation   - simulate innings / games, NRGG
+    counts       - PA outcome probabilities by ball-strike count
+    challenges   - run expectancy by base state / outs / count, and the
+                   value of an ABS challenge
 
-See examples/basic_simulation.py for a walkthrough.
+See examples/basic_simulation.py and examples/challenge_analysis.py for
+walkthroughs.
 """

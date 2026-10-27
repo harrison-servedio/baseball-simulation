@@ -50,6 +50,18 @@ Throughout the project, the runners on base are stored as one integer
 e.g. 0 = bases empty, 3 = runners on 1st and 2nd, 7 = bases loaded.
 `source/baserunning.py` has helpers to convert this to readable strings.
 
+Count encoding
+--------------
+The counts a PA passed through are stored as one integer (a 12-bit mask)
+in the PA table's `counts_seen` column. The count `balls-strikes` is bit
+`3 * balls + strikes`:
+
+    bit 0 -> 0-0, bit 1 -> 0-1, bit 2 -> 0-2, bit 3 -> 1-0, ... bit 11 -> 3-2
+
+e.g. a PA that went 0-0, 1-0, 1-1 has bits 0, 3 and 4 set. `source/counts.py`
+has the matching `COUNTS` tuple and uses this to build outcome
+probabilities by count.
+
 See Docs/trumedia_data.md for notes on the raw file itself.
 """
 
@@ -90,6 +102,8 @@ TRUMEDIA_COLUMNS = [
     'ManOnFirst',       # 'true' / 'false'
     'ManOnSecond',      # 'true' / 'false'
     'ManOnThird',       # 'true' / 'false'
+    'Balls',            # balls before the pitch (0-3)
+    'Strikes',          # strikes before the pitch (0-2)
     # --- what happened on the pitch ---
     'isPA',             # 1.0 if this pitch ended the PA, else 0.0
     'PlayResult',       # e.g. 'Single', 'Out', 'Strikeout (K)', 'Ball'
@@ -115,7 +129,7 @@ PA_TABLE_COLUMNS = [
     'game_id', 'date', 'inning', 'half', 'pa_of_inning',
     'batter_id', 'batter', 'team', 'batter_conference', 'pitcher_team', 'pitcher_conference',
     'outs_before', 'bases_before', 'outcome', 'runs', 'outs_on_play',
-    'inning_over', 'bases_after', 'transition_ok',
+    'inning_over', 'bases_after', 'transition_ok', 'counts_seen',
 ]
 
 # PlayResult values on PA-ending pitches -> paper outcome.
@@ -315,6 +329,11 @@ def build_pa_table(pitches: pd.DataFrame, verbose=False) -> pd.DataFrame:
             Roughly 98% of PAs pass. The ones that fail are mostly caused
             by things that happen between PAs (pickoffs, steals with no
             pitch recorded, substitutions) or by tagging errors.
+        counts_seen : int
+            Every count the PA passed through, as a 12-bit mask (see "Count
+            encoding" above). A count is included if any pitch of the PA was
+            thrown at it. 99.7% of PAs include 0-0; the rest are missing
+            their first pitch(es) in the data.
     """
     # The pitch that ended each PA. There can very rarely be two pitches
     # flagged as PA-ending in the same PA; keep the last.
@@ -331,6 +350,15 @@ def build_pa_table(pitches: pd.DataFrame, verbose=False) -> pd.DataFrame:
     )
     first['PAofInning'] = first['PAofInning'] - 1
     pa = pa.merge(first, on=pa_key, how='left')
+
+    # Counts each PA passed through. Adding up each PA's distinct count
+    # bits is the same as OR-ing them together.
+    valid = pitches['Balls'].between(0, 3) & pitches['Strikes'].between(0, 2)
+    seen = pitches.loc[valid, pa_key].copy()
+    count_idx = (3 * pitches.loc[valid, 'Balls'] + pitches.loc[valid, 'Strikes']).astype(int)
+    seen['count_bit'] = np.left_shift(1, count_idx.to_numpy())
+    seen = seen.drop_duplicates().groupby(pa_key, as_index=False)['count_bit'].sum()
+    pa = pa.merge(seen, on=pa_key, how='left')
 
     out = pd.DataFrame({
         'game_id': pa['TruMediaGameID'],
@@ -375,6 +403,7 @@ def build_pa_table(pitches: pd.DataFrame, verbose=False) -> pd.DataFrame:
     ends_ok = (outs_after == 3) & (out['runs'] <= runners_before)
     known = out['outcome'].isin(OUTCOMES)
     out['transition_ok'] = known & (continues_ok | ends_ok)
+    out['counts_seen'] = pa['count_bit'].fillna(0).astype(int)
 
     if verbose:
         n = len(out)

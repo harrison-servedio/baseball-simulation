@@ -93,7 +93,7 @@ def as_lineup(lineup):
 # Simulation
 # --------------------------------------------------------------------------
 
-def simulate_half_inning(lineup, batter_idx, runner_model, rng, outs=0, bases=0):
+def simulate_half_inning(lineup, batter_idx, runner_model, rng, outs=0, bases=0, first_batter=None):
     """
     Simulate one half-inning.
 
@@ -111,6 +111,11 @@ def simulate_half_inning(lineup, batter_idx, runner_model, rng, outs=0, bases=0)
         Outs at the start (default 0). Lets you start mid-inning.
     bases : int, optional
         Runners on base at the start, as a 3-bit int (default 0, empty).
+    first_batter : Player, optional
+        Used for the first PA instead of `lineup[batter_idx]`. Lets you
+        start in the middle of a PA, e.g. with the current batter adjusted
+        to his count (see `source.counts.at_count`). The batting order
+        still moves on to `lineup[batter_idx + 1]` after him.
 
     Returns
     -------
@@ -122,9 +127,9 @@ def simulate_half_inning(lineup, batter_idx, runner_model, rng, outs=0, bases=0)
     runs = 0
     n = len(lineup)
     advance = runner_model.advance      # local name: a bit faster in the loop
+    player = first_batter if first_batter is not None else lineup[batter_idx]
 
     for _ in range(MAX_PA_PER_HALF_INNING):
-        player = lineup[batter_idx]
         batter_idx = (batter_idx + 1) % n
 
         # Step 1: which of the 9 outcomes happens.
@@ -136,6 +141,7 @@ def simulate_half_inning(lineup, batter_idx, runner_model, rng, outs=0, bases=0)
         outs += outs_added
         if outs >= 3:
             return runs, batter_idx
+        player = lineup[batter_idx]
 
     raise RuntimeError(
         f"A half-inning went {MAX_PA_PER_HALF_INNING} PAs without 3 outs. "
@@ -187,6 +193,9 @@ class SimulationResult:
         95% confidence interval for the mean, `mean -/+ 1.96 * sd / sqrt(n)`
         (paper Section 3). Use these to decide whether two lineups or
         players really differ, as the paper does in Section 5.
+    per : str
+        What one simulated run total covers, for display: 'game' here,
+        'half-inning' for run expectancy (`source.challenges`).
     """
     runs: np.ndarray
     mean: float
@@ -194,20 +203,21 @@ class SimulationResult:
     n_games: int
     ci_low: float
     ci_high: float
+    per: str = 'game'
 
     @classmethod
-    def from_runs(cls, runs, z=1.96):
-        """Build the summary from an array of runs per game."""
+    def from_runs(cls, runs, z=1.96, per='game'):
+        """Build the summary from an array of runs per game (or per `per`)."""
         runs = np.asarray(runs)
         mean = runs.mean()
         sd = runs.std(ddof=1) if len(runs) > 1 else 0.0
         half_width = z * sd / math.sqrt(len(runs))
-        return cls(runs, mean, sd, len(runs), mean - half_width, mean + half_width)
+        return cls(runs, mean, sd, len(runs), mean - half_width, mean + half_width, per)
 
     def __repr__(self):
-        return (f"SimulationResult(mean={self.mean:.3f} runs/game, "
+        return (f"SimulationResult(mean={self.mean:.3f} runs/{self.per}, "
                 f"95% CI=({self.ci_low:.3f}, {self.ci_high:.3f}), "
-                f"sd={self.sd:.3f}, n_games={self.n_games:,})")
+                f"sd={self.sd:.3f}, n={self.n_games:,})")
 
 
 def simulate_games(lineup, runner_model, n_games=10_000, seed=None, innings=9):

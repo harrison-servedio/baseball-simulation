@@ -99,6 +99,42 @@ paper's logistic regression) are not implemented yet.
 | `EmpiricalTransitions.fit(pa)` | For each (outcome, runners on base, outs), draws the result (where runners end up, runs, outs) from how often it actually happened in the data. HR/BB/HBP use fixed rules. Situations with fewer than `min_obs` examples fall back to the simple rules. `model.describe('1B', 'R2', outs=2)` shows one situation's probabilities. |
 | `SimpleRules()` | The D'Esopo & Lefkowitz (1977) rules used by earlier simulators: singles score a runner from 2nd, and runners never move on outs. Useful as a baseline. |
 
+## Counts and ABS challenges
+
+To value a ball/strike challenge, the simulator can start in the middle of a PA at
+any count and play out the rest of the half-inning. Run expectancy (RE) is the
+average number of runs from that pitch to the 3rd out.
+
+```python
+from source.counts import count_probabilities
+from source.challenges import run_expectancy_table, re_matrix, challenge_table, challenge_value
+
+matrix = count_probabilities(pa)          # P(PA outcome | PA reached the count), 12 counts x 9 outcomes
+re_table = run_expectancy_table(avg, model, matrix, seed=1)   # 8 bases x 3 outs x 14 counts, ~30s
+print(re_matrix(re_table))                # grid: (outs, base state) x count
+
+# R1, 1 out, a 1-1 pitch called a strike: RE if it stands (1-2) vs. overturned (2-1)
+challenge_value(re_table, 'R1', outs=1, count='1-1', call='strike')
+
+challenges = challenge_table(re_table, p_overturn=1.0)   # every base/outs/count/call, 576 rows
+```
+
+- The **results matrix** is league-level (SEC/ACC by default) and the same for every
+  base/out state. `at_count(player, matrix, count)` shifts a batter's own rates by the
+  league's change from 0-0 to that count.
+- A called strike at 2 strikes, or a called ball at 3 balls, ends the PA. These show up
+  as the counts `'SO'` and `'BB'`. Challengeable calls are simple plays, so strike three
+  is an out with the runners holding, and ball four forces runners up. (The runner
+  model's strikeout data includes dropped third strikes and strike-'em-out-throw-'em-out
+  double plays. Nearly all of those come on swinging strikes.)
+- `p_overturn` weights the RE if challenged by the chance the challenge wins.
+  `challenger_gain` is in runs for whichever team challenges: the offense on called
+  strikes, the defense on called balls.
+- Everything is on a half-inning scale. The cost of losing a challenge for later in
+  the game is not modeled.
+
+See `examples/challenge_analysis.py` for a full walkthrough.
+
 ## Project layout
 
 ```
@@ -108,8 +144,11 @@ source/
   players.py       Player class (league average / from data / custom)
   baserunning.py   runner advancement models
   simulation.py    simulate half-innings and games, NRGG
+  counts.py        PA outcome probabilities by ball-strike count
+  challenges.py    run expectancy by base state / outs / count, ABS challenge value
 examples/
-  basic_simulation.py   end-to-end walkthrough
+  basic_simulation.py    end-to-end walkthrough
+  challenge_analysis.py  run expectancy by count and challenge values
 Docs/
   trumedia_data.md      notes and gotchas for the raw data file
   trumedia_cols.txt     full column list of the TruMedia file
