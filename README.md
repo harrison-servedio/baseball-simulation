@@ -135,6 +135,70 @@ challenges = challenge_table(re_table, p_overturn=1.0)   # every base/outs/count
 
 See `examples/challenge_analysis.py` for a full walkthrough.
 
+## Pitch-by-pitch simulation and challenge strategies
+
+Everything above is **PA-level**: the simulator draws one outcome per plate
+appearance and never sees individual pitches. Testing a challenge *strategy*
+needs pitches. Whether to challenge depends on how many challenges are left, and
+a challenge used now can't be used on a later pitch. So `source/challenge_sim.py`
+is a separate **pitch-by-pitch** half-inning simulator.
+
+| | Simulates | Use it for |
+|---|---|---|
+| `simulation.py`, `challenges.py` (PA-level) | one outcome per PA | runs per game, NRGG, RE by count, the value of one challenge |
+| `challenge_sim.py` (pitch-by-pitch) | every pitch: ball, called strike, other strike, in play / HBP | challenge strategies over a half-inning |
+
+How a PA is played out:
+
+1. The batter's outcome is drawn first, from his rates, as in the PA-level sim.
+2. The pitches are drawn from `pitch_transitions(pa)`: what the next pitch does, given
+   the count and how the PA ends, learned from the data.
+
+With no close calls, the pitch-by-pitch sim gives the same results as the
+PA-level one, about 3-4x more slowly. Fouls with 2 strikes don't change the count,
+so they aren't simulated.
+
+```python
+from source.challenge_sim import (PitchModel, ChallengeRules, PitchSituation,
+                                  compare_strategies_by_pitch, never_challenge,
+                                  always_challenge, confidence_at_least)
+
+pitch_model = PitchModel.fit(pa)
+
+# You set how often called pitches are challengeable, and the challenge rules
+rules = ChallengeRules(close_call_rate=0.05,     # or {'ball': .., 'strike': ..} or f(count, call)
+                       overturn_prob=None,       # chance the call is wrong; None = uniform 0-1
+                       offense_challenges=2, defense_challenges=2, keep_on_success=True)
+
+def my_strategy(s: PitchSituation) -> bool:      # return True to challenge
+    return s.confidence > 0.7 or (s.count_if_stands == 'SO' and s.confidence > 0.4)
+
+compare_strategies_by_pitch(avg, model, pitch_model, rules, {
+    'never': (never_challenge, never_challenge),   # (offense, defense); the first is the baseline
+    'mine':  (my_strategy, never_challenge),
+}, n_innings=50_000, seed=1)
+```
+
+- **Close calls.** Any called pitch (a ball, or a strike the batter took) is a close
+  call with chance `close_call_rate`. The offense can challenge close called strikes,
+  and the defense close called balls. Each close call gets a chance of being wrong,
+  which the strategy sees as `s.confidence`.
+- **A winning challenge** reverses the call. The count moves to the other branch,
+  and the rest of the PA is drawn again from that count.
+- **Results.** Each strategy gets runs per half-inning, the difference from the first
+  (baseline) strategy with a paired CI, and close calls, challenges made and won, and
+  challenges left per half-inning. Each half-inning gets its own seed, shared by every
+  strategy, so they all face the same pitches until their choices differ. That makes
+  the differences more precise than comparing separate runs.
+- **Run values.** `challenge_gains(re_table)` gives the run value of winning each
+  challenge, for strategies that weigh leverage. `gain_at_least(gains, min_runs)` is
+  a ready-made example of one.
+- **Not modeled:** what a challenge kept for later innings is worth. Challenges left
+  at the end are reported so you can weigh them yourself.
+
+See `examples/challenge_strategies.py` for a full walkthrough, with a
+`my_strategy` template to fill in.
+
 ## Project layout
 
 ```
@@ -143,12 +207,14 @@ source/
   outcomes.py      the 9 outcomes, batter and league-average probabilities
   players.py       Player class (league average / from data / custom)
   baserunning.py   runner advancement models
-  simulation.py    simulate half-innings and games, NRGG
-  counts.py        PA outcome probabilities by ball-strike count
+  simulation.py    simulate half-innings and games (PA-level), NRGG
+  counts.py        PA outcome probabilities by ball-strike count, pitch-level transitions
   challenges.py    run expectancy by base state / outs / count, ABS challenge value
+  challenge_sim.py pitch-by-pitch half-inning sim, challenge strategies
 examples/
-  basic_simulation.py    end-to-end walkthrough
-  challenge_analysis.py  run expectancy by count and challenge values
+  basic_simulation.py     end-to-end walkthrough
+  challenge_analysis.py   run expectancy by count and challenge values
+  challenge_strategies.py pitch-by-pitch sim: compare challenge strategies
 Docs/
   trumedia_data.md      notes and gotchas for the raw data file
   trumedia_cols.txt     full column list of the TruMedia file

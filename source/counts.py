@@ -30,12 +30,20 @@ Counts are written as 'balls-strikes' strings, like the raw file's
     'SO'  strike three (a strikeout)
 
 See `source/challenges.py` for run expectancy by count and ABS challenges.
+
+Pitch-level model
+-----------------
+`pitch_transitions` goes one level down: the chance of each kind of pitch
+(ball, called strike, other strike, end of the PA) at each count, given how
+the PA ends. It is the model the pitch-by-pitch simulator in
+`source/challenge_sim.py` walks through.
 """
 
 import numpy as np
 import pandas as pd
 
-from source.outcomes import OUTCOMES, LEAGUE_CONFERENCES, outcome_counts, league_subset
+from source.outcomes import (OUTCOMES, OUTCOME_INDEX, LEAGUE_CONFERENCES, WALK, STRIKEOUT,
+                             outcome_counts, league_subset)
 from source.players import Player
 
 
@@ -53,6 +61,16 @@ STRIKEOUT_COUNT = 'SO'
 ALL_COUNTS = COUNTS + (WALK_COUNT, STRIKEOUT_COUNT)
 
 CALLS = ('strike', 'ball')
+
+# What a pitch can do in the pitch-level model (`pitch_transitions`):
+#   'ball'           a ball (taken, so it was called)
+#   'called_strike'  a strike taken by the batter: the umpire's call
+#   'other_strike'   a swinging strike, or a foul with fewer than 2 strikes
+#   'end'            the PA ends on the pitch: in play, HBP, or a no-pitch
+#                    intentional walk
+# Fouls with 2 strikes don't change the count, so they are not modeled.
+PITCH_STEPS = ('ball', 'called_strike', 'other_strike', 'end')
+BALL_STEP, CALLED_STRIKE_STEP, OTHER_STRIKE_STEP, END_STEP = range(4)
 
 
 def count_label(balls, strikes):
@@ -196,3 +214,120 @@ def at_count(player, matrix, count):
 
     return Player(name=f'{player.name} ({count})', probs=probs,
                   player_id=player.player_id, n_pa=player.n_pa)
+
+
+def _count_path(mask):
+    """
+    The counts a PA passed through, in order, from its `counts_seen` mask,
+    or None if they don't form a clean path from 0-0 (each step adds one
+    ball or one strike). Paths with a gap come from pitches missing in the
+    data.
+    """
+    path = [i for i in range(len(COUNTS)) if mask >> i & 1]
+    if not path or path[0] != 0:
+        return None
+    for i, j in zip(path, path[1:]):
+        is_ball = j == i + 3
+        is_strike = j == i + 1 and i % 3 < 2
+        if not (is_ball or is_strike):
+            return None
+    return path
+
+
+# Every possible `counts_seen` mask -> its path (or None).
+_PATHS = [_count_path(mask) for mask in range(1 << len(COUNTS))]
+
+
+def pitch_transitions(pa: pd.DataFrame, conferences=LEAGUE_CONFERENCES) -> pd.DataFrame:
+    """
+    The pitch-level model: what the next pitch does, given the count and
+    how the PA will end.
+
+    This is what the pitch-by-pitch simulator (`source/challenge_sim.py`)
+    walks through. For each count and each of the 9 outcomes it gives the
+    chance that the next pitch is a ball, a called strike, another strike
+    (swinging, or a foul with fewer than 2 strikes) or ends the PA, among
+    PAs that reached that count and ended in that outcome. Fouls with 2
+    strikes don't change the count and are not modeled.
+
+    Why condition on the outcome: the simulator draws the PA's outcome first,
+    from the batter's own rates (`at_count`), and then the pitches that lead
+    to it. So every batter's outcome rates are exactly what they are in the
+    PA-level simulator, and the count path still looks like real PAs that
+    ended that way (a walk goes through 3 balls, a strikeout through 2
+    strikes).
+
+    How each step of a PA is classified:
+      - between two counts on the PA's path: 'ball' or a strike, 'called'
+        if the PA's `called_strikes` mask has that count
+      - at the last count: ball four ('BB' with 3 balls) is a 'ball';
+        strike three ('SO' with 2 strikes) is a called or other strike;
+        anything else is 'end'
+
+    Parameters
+    ----------
+    pa : pd.DataFrame
+        The PA table from `source.dataloaders.load_pa_table` (needs the
+        `counts_seen` and `called_strikes` columns).
+    conferences : iterable of str or None, optional
+        Which conferences make up the league, as in `count_probabilities`.
+        Defaults to SEC + ACC. `None` uses all of D1.
+
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by ('count', 'outcome'): 12 counts x 9 outcomes. Columns are
+        the 4 `PITCH_STEPS` (probabilities summing to 1 across a row) and
+        'PA', the number of PAs behind the row.
+
+    Notes
+    -----
+    - Only PAs whose `counts_seen` is a clean path from 0-0 are used (about
+      99%). Balls in play with an unknown hit type ('BIP_UNK') are left
+      out; GO and FO PAs go through the same counts.
+    - A (count, outcome) with no PAs gets a fixed path: a walk keeps taking
+      balls, a strikeout keeps taking (non-called) strikes, and anything
+      else ends the PA on the next pitch. Its 'PA' is 0.
+    """
+    pa = league_subset(pa, conferences)
+    pa = pa[pa['outcome'].isin(OUTCOMES)]
+    groups = pa.groupby(['counts_seen', 'called_strikes', 'outcome']).size()
+
+    n_counts, n_outcomes = len(COUNTS), len(OUTCOMES)
+    tally = np.zeros((n_counts, n_outcomes, len(PITCH_STEPS)))
+    for (seen, called, outcome), n in groups.items():
+        path = _PATHS[seen]
+        if path is None:
+            continue
+        o = OUTCOME_INDEX[outcome]
+        for i, j in zip(path, path[1:]):
+            if j == i + 3:
+                step = BALL_STEP
+            else:
+                step = CALLED_STRIKE_STEP if called >> i & 1 else OTHER_STRIKE_STEP
+            tally[i, o, step] += n
+
+        last = path[-1]
+        balls, strikes = divmod(last, 3)
+        if o == WALK and balls == 3:
+            step = BALL_STEP
+        elif o == STRIKEOUT and strikes == 2:
+            step = CALLED_STRIKE_STEP if called >> last & 1 else OTHER_STRIKE_STEP
+        else:
+            step = END_STEP
+        tally[last, o, step] += n
+
+    n_pa = tally.sum(axis=2)
+    probs = np.divide(tally, n_pa[:, :, None], out=np.zeros_like(tally), where=n_pa[:, :, None] > 0)
+    for c, o in zip(*np.nonzero(n_pa == 0)):
+        if o == WALK:
+            probs[c, o, BALL_STEP] = 1.0
+        elif o == STRIKEOUT:
+            probs[c, o, OTHER_STRIKE_STEP] = 1.0
+        else:
+            probs[c, o, END_STEP] = 1.0
+
+    index = pd.MultiIndex.from_product([COUNTS, OUTCOMES], names=['count', 'outcome'])
+    table = pd.DataFrame(probs.reshape(-1, len(PITCH_STEPS)), index=index, columns=list(PITCH_STEPS))
+    table['PA'] = n_pa.reshape(-1).astype(int)
+    return table
