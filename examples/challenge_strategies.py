@@ -132,7 +132,7 @@ strategies = {
     'never': (never_challenge, never_challenge),
     'offense always': (always_challenge, never_challenge),
     'offense conf >= 0.6': (confidence_at_least(0.6), never_challenge),
-    'offense my_strategy': (my_strategy, never_challenge),
+    # 'offense my_strategy': (my_strategy, never_challenge),
     'defense conf >= 0.6': (never_challenge, confidence_at_least(0.6)),
 }
 
@@ -156,6 +156,7 @@ gains = challenge_gains(re_table)
 
 strategies = {
     'never': (never_challenge, never_challenge),
+    'offense always': (always_challenge, never_challenge),
     'offense conf >= 0.6': (confidence_at_least(0.6), never_challenge),
     'offense gain >= 0.03': (gain_at_least(gains, 0.03), never_challenge),
     'offense gain >= 0.08': (gain_at_least(gains, 0.08), never_challenge),
