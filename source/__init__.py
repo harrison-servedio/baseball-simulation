@@ -13,7 +13,12 @@ Modules, in the order data flows through them:
     counts       - PA outcome probabilities by ball-strike count
     challenges   - run expectancy by base state / outs / count, and the
                    value of an ABS challenge
+    challenge_sim - pitch-by-pitch half-inning simulation with ABS
+                   challenges, for testing challenge strategies
 
-See examples/basic_simulation.py and examples/challenge_analysis.py for
-walkthroughs.
+`simulation` and `challenges` are PA-level (one outcome per PA);
+`challenge_sim` plays out every pitch.
+
+See examples/basic_simulation.py, examples/challenge_analysis.py and
+examples/challenge_strategies.py for walkthroughs.
 """

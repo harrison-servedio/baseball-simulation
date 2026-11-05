@@ -62,6 +62,12 @@ e.g. a PA that went 0-0, 1-0, 1-1 has bits 0, 3 and 4 set. `source/counts.py`
 has the matching `COUNTS` tuple and uses this to build outcome
 probabilities by count.
 
+The `called_strikes` column uses the same bits for the counts at which a
+called strike was taken. Each count is passed through once, so this says
+which strikes in the PA were called (and so could be challenged) rather
+than swinging or fouled off. `source.counts.pitch_transitions` uses both
+masks for the pitch-by-pitch simulator.
+
 See Docs/trumedia_data.md for notes on the raw file itself.
 """
 
@@ -105,6 +111,7 @@ TRUMEDIA_COLUMNS = [
     'Balls',            # balls before the pitch (0-3)
     'Strikes',          # strikes before the pitch (0-2)
     # --- what happened on the pitch ---
+    'PitchCall',        # e.g. 'BallCalled', 'StrikeCalled', 'StrikeSwinging', 'InPlay'
     'isPA',             # 1.0 if this pitch ended the PA, else 0.0
     'PlayResult',       # e.g. 'Single', 'Out', 'Strikeout (K)', 'Ball'
     'HitType',          # 'GroundBall', 'FlyBall', 'LineDrive', 'Popup', 'Undefined'
@@ -129,7 +136,7 @@ PA_TABLE_COLUMNS = [
     'game_id', 'date', 'inning', 'half', 'pa_of_inning',
     'batter_id', 'batter', 'team', 'batter_conference', 'pitcher_team', 'pitcher_conference',
     'outs_before', 'bases_before', 'outcome', 'runs', 'outs_on_play',
-    'inning_over', 'bases_after', 'transition_ok', 'counts_seen',
+    'inning_over', 'bases_after', 'transition_ok', 'counts_seen', 'called_strikes',
 ]
 
 # PlayResult values on PA-ending pitches -> paper outcome.
@@ -334,6 +341,10 @@ def build_pa_table(pitches: pd.DataFrame, verbose=False) -> pd.DataFrame:
             encoding" above). A count is included if any pitch of the PA was
             thrown at it. 99.7% of PAs include 0-0; the rest are missing
             their first pitch(es) in the data.
+        called_strikes : int
+            The counts at which a called strike ('StrikeCalled') was
+            taken, as a 12-bit mask like `counts_seen`. A called strike at
+            2 strikes is a strikeout looking.
     """
     # The pitch that ended each PA. There can very rarely be two pitches
     # flagged as PA-ending in the same PA; keep the last.
@@ -357,8 +368,14 @@ def build_pa_table(pitches: pd.DataFrame, verbose=False) -> pd.DataFrame:
     seen = pitches.loc[valid, pa_key].copy()
     count_idx = (3 * pitches.loc[valid, 'Balls'] + pitches.loc[valid, 'Strikes']).astype(int)
     seen['count_bit'] = np.left_shift(1, count_idx.to_numpy())
+    called = seen[pitches.loc[valid, 'PitchCall'].eq('StrikeCalled')]
     seen = seen.drop_duplicates().groupby(pa_key, as_index=False)['count_bit'].sum()
     pa = pa.merge(seen, on=pa_key, how='left')
+
+    # Counts at which a called strike was taken, the same way.
+    called = (called.drop_duplicates().groupby(pa_key, as_index=False)['count_bit'].sum()
+              .rename(columns={'count_bit': 'called_bit'}))
+    pa = pa.merge(called, on=pa_key, how='left')
 
     out = pd.DataFrame({
         'game_id': pa['TruMediaGameID'],
@@ -404,6 +421,7 @@ def build_pa_table(pitches: pd.DataFrame, verbose=False) -> pd.DataFrame:
     known = out['outcome'].isin(OUTCOMES)
     out['transition_ok'] = known & (continues_ok | ends_ok)
     out['counts_seen'] = pa['count_bit'].fillna(0).astype(int)
+    out['called_strikes'] = pa['called_bit'].fillna(0).astype(int)
 
     if verbose:
         n = len(out)

@@ -1,5 +1,9 @@
 """
-The game simulator.
+The game simulator (PA-level).
+
+PA-level: one outcome is drawn per PA; individual pitches are not
+simulated. For pitch-by-pitch simulation (needed for ABS challenges) see
+`source.challenge_sim`.
 
 Each PA is simulated in two steps (paper Section 2, "steps executed by
 the simulator for each at-bat"):
@@ -12,8 +16,9 @@ the simulator for each at-bat"):
 Repeat until 3 outs, keep the batting order going from inning to inning,
 and add up the runs.
 
-Only one team's offense is simulated: there is no opponent and no
-pitcher yet, so a "game" is 9 innings of one lineup batting. That is all
+Only one team's offense is simulated: there is no opponent, and every
+batter faces a league-average pitcher (pitcher matchups aren't modeled
+yet), so a "game" is 9 innings of one lineup batting. That is all
 that's needed for the paper's NRGG statistic (Section 3) and the batting
 order application (Section 5).
 TODO: two-team games, extra innings, in-game strategy (Section 4).
@@ -97,6 +102,9 @@ def simulate_half_inning(lineup, batter_idx, runner_model, rng, outs=0, bases=0,
     """
     Simulate one half-inning.
 
+    PA-level: one outcome per PA, no individual pitches. For pitch-by-pitch
+    simulation (needed for challenges) see `source.challenge_sim`.
+
     Parameters
     ----------
     lineup : list of Player
@@ -151,6 +159,9 @@ def simulate_half_inning(lineup, batter_idx, runner_model, rng, outs=0, bases=0,
 def simulate_game(lineup, runner_model, rng, innings=9):
     """
     Simulate one team batting for a full game.
+
+    PA-level: one outcome per PA, no individual pitches. For pitch-by-pitch
+    simulation (needed for challenges) see `source.challenge_sim`.
 
     The batting order carries over from one inning to the next.
 
@@ -223,6 +234,9 @@ class SimulationResult:
 def simulate_games(lineup, runner_model, n_games=10_000, seed=None, innings=9):
     """
     Simulate many games and summarize runs per game.
+
+    PA-level: one outcome per PA, no individual pitches. For pitch-by-pitch
+    simulation (needed for challenges) see `source.challenge_sim`.
 
     Parameters
     ----------

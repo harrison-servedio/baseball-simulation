@@ -33,6 +33,11 @@ swinging strikes.)
 This is on a half-inning scale only. The value of a challenge you lose (and
 so can't use later in the game) is not modeled.
 
+The RE here comes from the PA-level simulator, started at a count: the
+pitches after the call are not simulated one by one. To test a challenge
+*strategy* over a whole half-inning (challenges left, more close calls
+later), use the pitch-by-pitch simulator in `source/challenge_sim.py`.
+
 Usage
 -----
     from source.counts import count_probabilities

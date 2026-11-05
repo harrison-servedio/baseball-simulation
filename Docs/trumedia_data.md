@@ -25,6 +25,7 @@ Notes on the raw data file as used by the simulator. The full column list is in
 | `Batter`, `BatterId`, `BatterTeamName` | Who is batting. Use `BatterId`, because a few names belong to two players. |
 | `Outs` | Outs **before** the pitch (0–2). |
 | `ManOnFirst`, `ManOnSecond`, `ManOnThird` | Runners on base before the pitch. These are the **strings** `'true'`/`'false'`, not booleans. |
+| `PitchCall` | What the pitch was: `BallCalled`, `StrikeCalled`, `StrikeSwinging`, `FoulBall`, `InPlay`, `HitByPitch`, plus a few rare codes (`IB`, `BID`, `CI`, ...). Used to tell called strikes (challengeable) from swinging strikes and fouls. |
 | `isPA` | `1.0` on the pitch that ended the PA, `0.0` otherwise. |
 | `PlayResult` | Result of the pitch. On PA-ending pitches it is one of: `Single`, `Double`, `Triple`, `HomeRun`, `Walk`, `HitByPitch`, `Strikeout (K)` (swinging), `Strikeout (ꓘ)` (looking), `Out`, `FieldersChoice`, `Error`, `Sacrifice`. A handful of rows have `BatterInterference`, `NoPlay`, `Ball`, `Strike ...` or `''`. |
 | `HitType` | `GroundBall`, `FlyBall`, `LineDrive`, `Popup`, `Undefined` |
