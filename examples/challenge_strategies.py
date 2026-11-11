@@ -65,8 +65,8 @@ pitch_model = PitchModel.fit(pa)    # count probabilities + pitch-level transiti
 RULES = ChallengeRules(
     close_call_rate=0.05,
     overturn_prob=None,
-    offense_challenges=2,
-    defense_challenges=2,
+    offense_challenges=4,
+    defense_challenges=4,
     keep_on_success=True,
 )
 
