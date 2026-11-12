@@ -199,6 +199,17 @@ compare_strategies_by_pitch(avg, model, pitch_model, rules, {
 See `examples/challenge_strategies.py` for a full walkthrough, with a
 `my_strategy` template to fill in.
 
+### The value of a challenge by inning
+
+`examples/challenge_value_by_inning.py` puts a run value on a challenge you are
+still holding, at every point in a 9-inning game, and plots it. It combines the
+run value of winning a challenge in each situation (`challenge_table`) with how
+often each situation comes up (counted with the pitch-by-pitch simulator), then
+works backward from the last out. The team challenges a fixed share of the close
+calls it sees, picked at random (`CHALLENGE_RATE`, 50%). The value falls as the
+game goes on: with fewer close calls left, the challenge has fewer chances to be
+used.
+
 ## Project layout
 
 ```
@@ -215,6 +226,7 @@ examples/
   basic_simulation.py     end-to-end walkthrough
   challenge_analysis.py   run expectancy by count and challenge values
   challenge_strategies.py pitch-by-pitch sim: compare challenge strategies
+  challenge_value_by_inning.py  plot what a challenge is worth as the game goes on
 Docs/
   trumedia_data.md      notes and gotchas for the raw data file
   trumedia_cols.txt     full column list of the TruMedia file

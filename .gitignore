@@ -20,3 +20,7 @@ env/
 
 # Scratch files
 test.*
+examples/challenge_value_by_inning.png
+
+# Claude
+.claude
